@@ -6,7 +6,7 @@
 # =============================================================================
 set -euo pipefail
 
-BUILD="$1"; MANUAL="$2"; OUT="$3"
+BUILD="$(cd "$1" && pwd)"; MANUAL="$(cd "$(dirname "$2")" && pwd)/$(basename "$2")"; mkdir -p "$3"; OUT="$(cd "$3" && pwd)"
 VER="1.0.0"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ART="$BUILD/Changes_artefacts/Release"
