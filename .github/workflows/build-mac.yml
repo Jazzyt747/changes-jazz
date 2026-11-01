@@ -1,0 +1,110 @@
+name: Build macOS
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  mac:
+    runs-on: macos-14            # Apple Silicon runner; we build a universal (arm64 + x86_64) binary
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tools
+        run: |
+          sw_vers
+          xcodebuild -version
+          brew install ninja || true
+          python3 -m pip install --break-system-packages reportlab pypdf pillow || python3 -m pip install reportlab pypdf pillow
+
+      - name: Fetch JUCE 7.0.12
+        run: git clone --depth 1 -b 7.0.12 https://github.com/juce-framework/JUCE.git "$RUNNER_TEMP/JUCE"
+
+      - name: Configure (universal, Release)
+        run: >
+          cmake -S . -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DCHANGES_TESTS=ON
+          -DJUCE_DIR="$RUNNER_TEMP/JUCE"
+          -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
+          -DCMAKE_OSX_DEPLOYMENT_TARGET=10.13
+
+      - name: Build
+        run: cmake --build build --config Release -j 4
+
+      - name: Unit tests (theory engine)
+        run: build/TheoryTests_artefacts/Release/TheoryTests
+
+      - name: Render tests (audio, sequencer, MIDI export, state, GUI snapshots)
+        run: |
+          mkdir -p test-out
+          build/ChangesTests_artefacts/Release/ChangesTests "$PWD/test-out"
+
+      - name: Validate Audio Unit (auval)
+        run: |
+          mkdir -p ~/Library/Audio/Plug-Ins/Components
+          ditto build/Changes_artefacts/Release/AU/Changes.component ~/Library/Audio/Plug-Ins/Components/Changes.component
+          codesign --force --deep --sign - ~/Library/Audio/Plug-Ins/Components/Changes.component
+          killall -9 AudioComponentRegistrar || true
+          sleep 3
+          auval -a | grep -i jazzy || true
+          auval -strict -v aumu Chg1 Jzty | tee auval.log
+          grep -q "AU VALIDATION SUCCEEDED" auval.log
+
+      - name: Validate VST3 (pluginval)
+        run: |
+          curl -sSL -o pluginval.zip https://github.com/Tracktion/pluginval/releases/download/v1.0.3/pluginval_macOS.zip
+          unzip -q pluginval.zip
+          codesign --force --deep --sign - build/Changes_artefacts/Release/VST3/Changes.vst3
+          ./pluginval.app/Contents/MacOS/pluginval --strictness-level 5 --skip-gui-tests --validate-in-process \
+              --output-dir pluginval-logs build/Changes_artefacts/Release/VST3/Changes.vst3
+
+      - name: Manual (Mac edition)
+        run: |
+          SHOTS=test-out
+          [ -f test-out/gui_intermediate.png ] || SHOTS=Docs/screens
+          mkdir -p dist
+          python3 Packaging/make_manual.py Resources "$SHOTS" "dist/Changes Manual (Mac).pdf" mac
+
+      - name: Package (.pkg installer + .dmg + portable zip)
+        run: bash Packaging/mac/build_mac_package.sh build "dist/Changes Manual (Mac).pdf" dist
+
+      - name: Test the installer
+        run: |
+          sudo installer -pkg dist/Changes-1.0.0-Mac.pkg -target /
+          ls -la /Applications/Changes.app/Contents/MacOS /Library/Audio/Plug-Ins/Components/Changes.component /Library/Audio/Plug-Ins/VST3/Changes.vst3
+          ls -la "/Library/Application Support/JazzyT Audio/Changes"
+          codesign --verify --deep --strict /Applications/Changes.app
+          lipo -info /Applications/Changes.app/Contents/MacOS/Changes
+          # launch the app for a few seconds to prove it starts
+          /Applications/Changes.app/Contents/MacOS/Changes & APP_PID=$!
+          sleep 8
+          kill -0 $APP_PID && echo "Changes.app is running" && kill $APP_PID
+          killall -9 AudioComponentRegistrar || true
+          sleep 2
+          auval -v aumu Chg1 Jzty | tail -3
+          # uninstaller
+          printf 'y\n' | sudo bash "/Library/Application Support/JazzyT Audio/Changes/Uninstall Changes.command"
+          test ! -e /Applications/Changes.app && test ! -e /Library/Audio/Plug-Ins/Components/Changes.component && echo "uninstall OK"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Changes-1.0.0-Mac
+          path: |
+            dist/Changes-1.0.0-Mac.dmg
+            dist/Changes-1.0.0-Mac.pkg
+            dist/Changes-1.0.0-Mac-portable.zip
+            dist/Changes Manual (Mac).pdf
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: |
+            test-out/*.png
+            auval.log
+            pluginval-logs
+          if-no-files-found: ignore
