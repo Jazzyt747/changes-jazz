@@ -1,5 +1,8 @@
 name: Build macOS
 
+permissions:
+  contents: write
+
 on:
   push:
     branches: [ main ]
@@ -92,6 +95,17 @@ jobs:
           # uninstaller
           printf 'y\n' | sudo bash "/Library/Application Support/JazzyT Audio/Changes/Uninstall Changes.command"
           test ! -e /Applications/Changes.app && test ! -e /Library/Audio/Plug-Ins/Components/Changes.component && echo "uninstall OK"
+
+      - name: Publish as a (private) GitHub Release "mac-latest"
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd test-out && zip -q ../dist/test-screenshots.zip *.png && cd ..
+          gh release delete mac-latest --yes --cleanup-tag || true
+          gh release create mac-latest --title "Changes 1.0.0 for macOS (latest build)" --prerelease \
+            --notes "Built and tested by GitHub Actions run ${{ github.run_id }} on $(sw_vers -productName) $(sw_vers -productVersion)." \
+            dist/Changes-1.0.0-Mac.dmg dist/Changes-1.0.0-Mac.pkg dist/Changes-1.0.0-Mac-portable.zip \
+            "dist/Changes Manual (Mac).pdf" dist/test-screenshots.zip
 
       - uses: actions/upload-artifact@v4
         with:
