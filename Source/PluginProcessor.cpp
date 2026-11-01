@@ -1,4 +1,5 @@
 #include "PluginProcessor.h"
+#include <algorithm>
 #include "PluginEditor.h"
 
 using namespace theory;
@@ -730,7 +731,7 @@ void ChangesProcessor::timerCallback()
 // Progression
 void ChangesProcessor::syncProgressionToAudio()
 {
-    const int n = (int) juce::jmin<size_t> (progression.size(), progAudio.size());
+    const int n = (int) std::min (progression.size(), progAudio.size());
     for (int i = 0; i < n; ++i) progAudio[(size_t) i].store (progression[(size_t) i].pack());
     progLen.store (n);
 }

@@ -36,7 +36,7 @@ jobs:
           -DCMAKE_OSX_DEPLOYMENT_TARGET=10.13
 
       - name: Build
-        run: cmake --build build --config Release -j 4
+        run: cmake --build build --config Release -j 4 -- -k 0
 
       - name: Unit tests (theory engine)
         run: build/TheoryTests_artefacts/Release/TheoryTests
