@@ -55,7 +55,7 @@ component() {   # name identifier [scripts]
     local extra=()
     [ -n "$scripts" ] && extra=(--scripts "$scripts")
     pkgbuild --root "$WORK/root_$name" --component-plist "$WORK/$name.plist" \
-             --identifier "$id" --version "$VER" --install-location / "${extra[@]}" \
+             --identifier "$id" --version "$VER" --install-location / ${extra[@]+"${extra[@]}"} \
              "$WORK/pkgs/$name.pkg"
 }
 component app  com.jazzytaudio.changes.app
