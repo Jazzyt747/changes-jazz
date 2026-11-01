@@ -9,6 +9,10 @@ jobs:
   mac:
     runs-on: macos-15            # Apple Silicon runner; we build a universal (arm64 + x86_64) binary
     timeout-minutes: 60
+    env:
+      # also applies to JUCE's juceaide helper, which otherwise targets the runner's macOS
+      # and trips over APIs that are obsoleted in the macOS 15 SDK
+      MACOSX_DEPLOYMENT_TARGET: "10.13"
     steps:
       - uses: actions/checkout@v4
 
