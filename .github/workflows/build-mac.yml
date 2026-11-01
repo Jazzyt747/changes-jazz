@@ -7,7 +7,7 @@ on:
 
 jobs:
   mac:
-    runs-on: macos-14            # Apple Silicon runner; we build a universal (arm64 + x86_64) binary
+    runs-on: macos-15            # Apple Silicon runner; we build a universal (arm64 + x86_64) binary
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
